@@ -157,7 +157,7 @@ if ( $dialog->get_request() ) {
 			$dialog->add_message("Такой переменной нет");
 		}
 		
-		$dialog -> add_button('Покажи код', null, null, true);
+		$dialog -> add_button('Открой мой код', null, null, true);
     }
     $dialog -> bind_template_action([
         'Выведи переменную {var:word}'
