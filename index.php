@@ -25,17 +25,31 @@ if($alice->get_request()) {
         $alice -> add_button('Да', null, null, true);
         $alice -> add_button('Нет', null, null, true);
         $alice -> add_button('Я буду создать программу!', null, null, true);
+        $alice -> add_button('Сохранить файл', null, null, true);
         $alice -> add_message('Здравствуйте! Хотите написать свой код?');
 
         $alice->set_user_data("projects", "[]");
         $alice->set_user_data("perems", "[]");
     }
     $alice -> bind_new_action('_new_session');
+
+    function _saveFile($alice, $tokens) {
+        $alice -> add_message('Сохранение!');
+        $text = "
+            function test() {
+                console.log(1);
+            }
+        ";
+        $file = "test.js";
+        file_put_contents($file, $text);
+    }
+    $alice->bind_template_action([
+        'Сохранить файл'
+    ], '_saveFile');
     
     function _yes($tokens, $alice) {
         $alice -> add_message(
-            'Вот и молодец, пора создать свой проект!
-            Введите его название'
+            'Вот и молодец, пора создать свой проект!'
         );
     }
     $alice -> bind_words_action([
@@ -119,7 +133,7 @@ if($alice->get_request()) {
             "value"  => $tokens['value']
         );
         $alice->set_user_data('perems', json_encode($p_arr, JSON_UNESCAPED_UNICODE) );
-        $alice -> add_message('Создана переменная ' . $tokens['perem'] . ' со значением ' . $tokens['value']);
+        $alice -> add_message('let ' . $tokens['perem'] . ' = ' . $tokens['value']. ';');
     }
     $alice->bind_template_action([
         'Создать переменную {perem:word} со значением {value:word}', 
@@ -138,7 +152,7 @@ if($alice->get_request()) {
         $alice -> add_message($out);
     }
     $alice -> bind_words_action([
-        'покажи', 
+        'открой', 
         'все', 
         'мои', 
         'переменные', 
