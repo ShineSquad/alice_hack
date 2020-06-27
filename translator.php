@@ -90,6 +90,9 @@ class Program {
 
 	private function expression($expression_origin) {
 		$exp_nodes = preg_split('/([\+\-\:\*])/', $expression_origin);
+		echo "<br>*<br>";
+		print_r($exp_nodes);
+		echo "<br>*<br>";
 		preg_match('/([\+\-\/\*])/', $expression_origin, $exp, PREG_OFFSET_CAPTURE);
 
 		$vals = array();
