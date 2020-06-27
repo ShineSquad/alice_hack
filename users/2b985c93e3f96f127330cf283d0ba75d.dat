@@ -1,0 +1,7 @@
+a:2:{s:4:"code";s:93:"var Misha;
+Misha = 15+14;
+console.log(Misha);
+var Andrey;
+Andrey = 999;
+console.log(Andrey);
+";s:4:"vars";s:106:"[{"name":"Misha","origin":"Миша","value":null},{"name":"Andrey","origin":"Андрей","value":null}]";}
