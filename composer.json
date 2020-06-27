@@ -1,0 +1,5 @@
+{
+    "require": {
+        "avdeevsv91/yandex-dialogs-php": "^0.2.2"
+    }
+}
