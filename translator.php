@@ -1,28 +1,15 @@
-<meta charset="utf-8">
 <?php
-$in_stream  = array();
-$out_stream = array();
-
-$pseudo = file_get_contents("pseudo.txt");
-$programs = explode("programm", $pseudo);
-
-foreach ($programs as $pg) {
-	echo $pg . "<hr>";
-}
-
 class Program {
 	public $origin;
 	public $in_stream;
-	public $out_stream;
+	public $out_stream = array();
 
 	private $vars = array();
 
 	function __construct($source_string) {
 		$origin = $source_string;
-
-		$v = $this->translator($origin);
-
-		print_r($this->out_stream);
+		$this->origin = $source_string;
+		$this->translator($origin);
 	}
 
 	private function translator($str) {
@@ -31,11 +18,35 @@ class Program {
 		$default_val = [0];
 		$rows = explode("\n", $str);
 
+		$on_if    = false;
+		$if_state = false;
+		$on_else  = false;
+
 		foreach ($rows as $row) {
 			if (strlen($row) == 0) continue;
+
+			$on_else = preg_match('/иначе/', $row);
+
+			if ( $on_if && $if_state  &&  $on_else ) continue;
+			if ( $on_if && !$if_state && !$on_else ) continue;
+			
+			// search output command
+			if ( preg_match('/выведи/', $row) ) {
+				$set_row = preg_replace('/выведи\s/', "", $row);
+
+				$out = $this->is_expression($set_row)
+					? $this->expression($set_row)
+					: $set_row;
+
+				$this->out_stream[] = $this->contain_var($out);
+
+				continue;
+			}
+
 			// set varialables
+			$set_var = false;
 			foreach ($codenames as $key=>$cn) {
-				if (preg_match('/'.$cn.'/', $row)) {
+				if ( preg_match('/'.$cn.'/', $row) && !preg_match('/случайное_число/', $row)) {
 					$row_expl = explode(" ", $row);
 					$this->vars[] = array(
 						"name"  => $row_expl[1],
@@ -43,88 +54,158 @@ class Program {
 						"value" => $default_val[$key]
 					);
 
+					$set_var = true;
 					break;
 				}
 			}
 			
+			if ( $set_var ) continue;
+
 			// search assign char
 			if ( preg_match('/\=/', $row) ) {
-				$del_spaces = preg_replace('/\s/', "", $row);
-				$assign_nodes = explode("=", $del_spaces);
-
-				if ( $this->is_expression($assign_nodes[1]) ) {
-					$assign_val = $this->expression($assign_nodes[1]);
+				$assign_nodes = explode("=", $row);
+				
+				if ( $this->is_random($assign_nodes[1]) ) {
+					$assign_val = $this->randint($assign_nodes[1]);
 				}
-				else {
+				else if ( $this->is_expression($assign_nodes[1]) ) {
+					$assign_val = $this->expression($assign_nodes[1]);
+				} else {
 					$assign_val = $assign_nodes[1];
 				}
 
 				$this->set_val($assign_nodes[0], $assign_val);
+
+				continue;
 			}
 
-			// search output command
-			if ( preg_match('/выведи/', $row) ) {
-				$set_row = preg_replace('/выведи\s/', "", $row);
-				if ( $this->is_expression($set_row) ) {
-					$out = $this->expression($set_row);
+			// search IF expression
+			echo $row . "<br>";
+			if ( preg_match('/если/', $row) ) {
+				if ( preg_match('/конец_если/', $row) ) { 
+					$on_if = false; 
 				}
 				else {
-					$out = $set_row;
+					$set_row = preg_replace('/если\s/', "", $row);
+
+					$on_if = true;
+					$if_state = $this->logic_state($set_row);
+					$on_else   = $if_state ? false : true;
 				}
 
-				$this->out_stream = $out;
+				continue;
 			}
 		}
 
 		return $this->vars;
 	}
 
-	private function is_expression($value) {
-		if ( preg_match('/([\+\-\/\*])/', $value) ) {
-			return true;
-		}
-		else {
-			return false;
-		}
+// #################################################
+// ######## Simple logic expressions solver ########
+// #################################################
+
+	private function is_logic($value) {
+		if ( preg_match('/(больше)|(меньше)|(равно)/', $value) ) 
+			{ return true; } 
+		else 
+			{ return false; }
 	}
 
-	private function expression($expression_origin) {
-		$exp_nodes = preg_split('/([\+\-\:\*])/', $expression_origin);
-		preg_match('/([\+\-\/\*])/', $expression_origin, $exp, PREG_OFFSET_CAPTURE);
+	private function logic_state($expression_origin) {
+		$del_double_spaces = preg_replace('/\s/', " ", $expression_origin);
+		$exp_nodes = preg_split('/(больше)|(меньше)|(равно)/', $del_double_spaces);
+
+		preg_match_all('/(больше)|(меньше)|(равно)/', $del_double_spaces, $exp);
 
 		$vals = array();
 
 		foreach ($exp_nodes as $val) {
-			if (is_numeric($val)) {
-				$vals[] = (int)$val;
-			}
-			else {
-				$vals[] = (int)$this->get_val($val);
-			}
+			$vals[] = is_numeric($val)
+				? (int)$val
+				: (int)$this->get_val($val);
 		}
 
-		$out = 0;
-
-		switch ($exp[0][0]) {
-			case '+':
-				$out = $vals[0] + $vals[1];
+		$e = preg_replace("/\s/", "", $exp[0][0]);
+		switch ($e) {
+			case 'больше':
+				return (int)$vals[0] > (int)$vals[1]
+					? true
+					: false;
 				break;
-			case '-':
-				$out = $vals[0] - $vals[1];
+			case 'меньше':
+				return (int)$vals[0] < (int)$vals[1]
+					? true
+					: false;
 				break;
-			case '/':
-				$out = $vals[0] / $vals[1];
-				break;
-			case '*':
-				$out = $vals[0] * $vals[1];
+			case 'равно':
+				return (int)$vals[0] == (int)$vals[1]
+					? true
+					: false;
 				break;
 			default:
-				return "Error";
-				break;
+				return "Error: undefined sign"; break;
+		}
+	}
+
+// ##################################################
+// ######### Simple math expressions solver #########
+// ##################################################
+
+	private function is_expression($value) {
+		if ( preg_match('/([\+\-\/\*])/', $value) ) 
+			{ return true; } 
+		else 
+			{ return false; }
+	}
+
+	private function expression($expression_origin) {
+		$del_spaces = preg_replace('/\s/', "", $expression_origin);
+		$exp_nodes = preg_split('/([\+\-\:\*])/', $del_spaces);
+
+		preg_match_all('/([\+\-\/\*])/', $del_spaces, $exp);
+
+		$vals = array();
+
+		foreach ($exp_nodes as $val) {
+			$vals[] = is_numeric($val)
+				? (int)$val
+				: (int)$this->get_val($val);
 		}
 
-		return $out;
+		$actions_order = array("*", "/", "+", "-");
+		$aoi = 0;
+
+		// math expression order
+		while (count($exp[0]) > 0) {
+			$n1 = array_search($actions_order[$aoi], $exp[0]);
+
+			if ($n1 === false) { $aoi++; continue; }
+
+			$n2 = $n1 + 1;
+			$act = $actions_order[$aoi];
+
+			switch ($act) {
+				case '+':
+					$vals[$n1] += $vals[$n2]; break;
+				case '-':
+					$vals[$n1] -= $vals[$n2]; break;
+				case '/':
+					$vals[$n1] /= $vals[$n2]; break;
+				case '*':
+					$vals[$n1] *= $vals[$n2]; break;
+				default:
+					return "Error: undefined sign"; break;
+			}
+
+			array_splice($exp[0], $n1, 1);
+			array_splice($vals,   $n2, 1);
+		}
+
+		return $vals[0];
 	}
+// #################################################
+// ######### Programm varialable functions #########
+// #################################################
 
 	private function get_val($varialable_name) {
 		$var_name = preg_replace('/\s/', "", $varialable_name);
@@ -134,7 +215,7 @@ class Program {
 			}
 		}
 
-		return "Error";
+		return "Error: undefined varialable name";
 	}
 
 	private function set_val($varialable_name, $value) {
@@ -142,10 +223,40 @@ class Program {
 		foreach ($this->vars as $key=>$var) {
 			if ($var["name"] == $var_name) {
 				$this->vars[$key]["value"] = $value;
+				return true;
 			}
 		}
+
+		return "Error: undefined varialable name";
+	}
+
+// ##################################################
+// ############# Random function assets #############
+// ##################################################
+	private function is_random($expression) {
+		if ( preg_match("/случайное_число/", $expression) ) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+
+	private function randint($expression_origin) {
+		$expr = preg_replace('/случайное_число\sот/', "", $expression_origin);
+		$rm_spaces = preg_replace('/\s/', "", $expr);
+		$vals = explode("до", $rm_spaces);
+
+		return rand((int)$vals[0], (int)$vals[1]);
+	}
+
+	private function contain_var($outstr) {
+		$out = $outstr;
+		foreach ($this->vars as $key=>$var) {
+			$out = preg_replace('/'.$var["name"].'/', $var["value"], $out);
+		}
+
+		return $out;
 	}
 }
-
-$t = new Program($programs[0]);
 ?>
